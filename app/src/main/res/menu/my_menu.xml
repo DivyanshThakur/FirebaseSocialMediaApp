@@ -6,5 +6,9 @@
         android:title="Logout"
         android:orderInCategory="1"
         app:showAsAction="always" />
+    <item android:id="@+id/viewPostsItem"
+        android:title="View Posts"
+        android:orderInCategory="2"
+        app:showAsAction="always" />
 
 </menu>

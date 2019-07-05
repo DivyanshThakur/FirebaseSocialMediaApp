@@ -18,6 +18,7 @@ import android.provider.MediaStore;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -25,8 +26,10 @@ import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
@@ -39,9 +42,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.UUID;
 
-public class SocialMediaActivity extends AppCompatActivity {
+public class SocialMediaActivity extends AppCompatActivity implements AdapterView.OnItemClickListener {
 
     private FirebaseAuth mAuth;
     private EditText edtDescription;
@@ -53,6 +57,8 @@ public class SocialMediaActivity extends AppCompatActivity {
     private ProgressDialog dialog;
     private ArrayList<String> usernames;
     private ArrayAdapter adapter;
+    private ArrayList<String> uids;
+    private String imageDownloadLink;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,9 +76,13 @@ public class SocialMediaActivity extends AppCompatActivity {
         btnCreatePost = findViewById(R.id.btnCreatePost);
         postImageView = findViewById(R.id.postImageView);
         usersListView = findViewById(R.id.usersListView);
+
+        usersListView.setOnItemClickListener(this);
+
         usernames = new ArrayList<>();
         adapter = new ArrayAdapter(SocialMediaActivity.this, android.R.layout.simple_list_item_1, usernames);
 
+        uids = new ArrayList<>();
         usersListView.setAdapter(adapter);
 
         postImageView.setOnClickListener(new View.OnClickListener() {
@@ -86,8 +96,6 @@ public class SocialMediaActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
 
-                dialog.setMessage("Uploading...");
-                dialog.show();
                 uploadImageToServer();
             }
         });
@@ -130,6 +138,9 @@ public class SocialMediaActivity extends AppCompatActivity {
 
         if (item.getItemId() == R.id.logOutItem) {
             logout();
+        } else if (item.getItemId() == R.id.viewPostsItem) {
+            Intent intent = new Intent(SocialMediaActivity.this, ViewPostsActivity.class);
+            startActivity(intent);
         }
 
         return super.onOptionsItemSelected(item);
@@ -167,6 +178,10 @@ public class SocialMediaActivity extends AppCompatActivity {
 
         if (bitmap != null) {
 
+            dialog.setMessage("Uploading...");
+            dialog.show();
+
+
             // Get the data from an ImageView as bytes
             postImageView.setDrawingCacheEnabled(true);
             postImageView.buildDrawingCache();
@@ -196,6 +211,7 @@ public class SocialMediaActivity extends AppCompatActivity {
                     FirebaseDatabase.getInstance().getReference().child("my_users").addChildEventListener(new ChildEventListener() {
                         @Override
                         public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+                            uids.add(dataSnapshot.getKey());
                             String username = (String) dataSnapshot.child("username").getValue();
                             usernames.add(username);
                             adapter.notifyDataSetChanged();
@@ -221,10 +237,40 @@ public class SocialMediaActivity extends AppCompatActivity {
 
                         }
                     });
+
+                    taskSnapshot.getMetadata().getReference().getDownloadUrl().addOnCompleteListener(new OnCompleteListener<Uri>() {
+                        @Override
+                        public void onComplete(@NonNull Task<Uri> task) {
+                            if (task.isSuccessful()) {
+                                imageDownloadLink = task.toString();
+                            }
+                        }
+                    });
+
                 }
             });
         } else {
             Toast.makeText(SocialMediaActivity.this, "Please select an imagel", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override
+    public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+
+        HashMap<String, String> dataMap = new HashMap<>();
+        dataMap.put("fromWhom", FirebaseAuth.getInstance().getCurrentUser().getDisplayName());
+        dataMap.put("imageIdentifier", imageIdentifier);
+        dataMap.put("imageLink", imageDownloadLink);
+        dataMap.put("des", edtDescription.getText().toString());
+
+        FirebaseDatabase.getInstance().getReference().child("my_users").child(uids.get(i)).child("received_posts").push().setValue(dataMap).addOnCompleteListener(new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                if (task.isSuccessful()) {
+                    Toast.makeText(SocialMediaActivity.this, "Data Send", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
     }
 }
